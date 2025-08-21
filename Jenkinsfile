@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "your-docker-username/preprod-demo-service"
+        DOCKER_IMAGE = "hddocker125/demo-jenk-service"
         DOCKER_TAG = "latest"
         DOCKER_REGISTRY = "docker.io"
     }
@@ -19,7 +19,7 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 echo 'Building and pushing Docker image...'
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'H-docker-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
                         docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
