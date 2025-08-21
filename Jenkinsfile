@@ -1,61 +1,67 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    GOPATH = "${env.WORKSPACE}/.gopath"
-    GOBIN  = "${env.GOPATH}/bin"
-    PATH   = "${env.PATH}:${env.GOBIN}"
-    DIST   = "dist"
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-        sh 'go version || true'
-      }
+    environment {
+        DOCKER_IMAGE = "your-docker-username/preprod-demo-service"
+        DOCKER_TAG = "latest"
+        DOCKER_REGISTRY = "docker.io"
     }
 
-    stage('Cache & Env') {
-      steps {
-        sh 'mkdir -p ${GOPATH} ${GOBIN} ${DIST}'
-      }
-    }
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Building Go Application...'
+                sh 'go mod tidy'
+                sh 'go build -o app .'
+            }
+        }
 
-    stage('Build') {
-      steps {
-        sh 'go mod tidy'
-        sh 'go build -o ${DIST}/app ./cmd/app'
-      }
-    }
+        stage('Docker Build & Push') {
+            steps {
+                echo 'Building and pushing Docker image...'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
+                        docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
+                        docker push $DOCKER_IMAGE:$DOCKER_TAG
+                        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG)
+                        echo "DOCKER_DIGEST=$DIGEST" >> env.properties
+                    '''
+                }
+                script {
+                    def props = readProperties file: 'env.properties'
+                    env.DOCKER_DIGEST = props['DOCKER_DIGEST']
+                }
+            }
+        }
 
-    stage('Test') {
-      steps {
-        sh 'go install gotest.tools/gotestsum@latest'
-        sh '${GOBIN}/gotestsum --junitfile test-report.xml -- -v ./...'
-        junit 'test-report.xml'
-      }
-    }
+        stage('Registering build artifact') {
+            steps {
+                echo "Registering Docker artifact..."
+                script {
+                    registerBuildArtifactMetadata(
+                        name: "demo-jenk-artifact",
+                        version: "1.0.0",
+                        type: "docker",
+                        url: "${env.DOCKER_REGISTRY}/${env.DOCKER_IMAGE}:${env.DOCKER_TAG}",
+                        digest: "${env.DOCKER_DIGEST}",
+                        label: "qa, prod"
+                    )
+                }
+            }
+        }
 
-    stage('Security Scan') {
-      steps {
-        sh 'go install github.com/securego/gosec/v2/cmd/gosec@latest'
-        sh '${GOBIN}/gosec -fmt junit-xml -out gosec-report.xml ./... || true'
-        junit 'gosec-report.xml'
-        archiveArtifacts artifacts: 'gosec-report.xml', fingerprint: true
-      }
-    }
+        stage('Test') {
+            steps {
+                echo 'Running Unit Tests...'
+                sh 'go test ./...'
+            }
+        }
 
-    stage('Publish Artifacts') {
-      steps {
-        archiveArtifacts artifacts: '${DIST}/**', fingerprint: true
-      }
+        stage('Deploy') {
+            steps {
+                echo 'Deploying...'
+            }
+        }
     }
-  }
-
-  post {
-    always {
-      cleanWs()
-    }
-  }
 }
