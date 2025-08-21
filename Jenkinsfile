@@ -20,17 +20,17 @@ pipeline {
             steps {
                 echo 'Building and pushing Docker image...'
                 withCredentials([usernamePassword(credentialsId: 'H-docker-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                  script {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
-                        docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
-                        docker push $DOCKER_IMAGE:$DOCKER_TAG
-                        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG)
-                        echo "DOCKER_DIGEST=$DIGEST" >> env.properties
+                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
+                      docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
+                      docker push $DOCKER_IMAGE:$DOCKER_TAG
                     '''
-                }
-                script {
-                    def props = readProperties file: 'env.properties'
-                    env.DOCKER_DIGEST = props['DOCKER_DIGEST']
+                    env.DOCKER_DIGEST = sh(
+                      script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG",
+                      returnStdout: true
+                    ).trim()
+                  }
                 }
             }
         }
