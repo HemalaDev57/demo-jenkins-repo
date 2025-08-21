@@ -27,7 +27,7 @@ pipeline {
                       docker push $DOCKER_IMAGE:$DOCKER_TAG
                     '''
                     env.DOCKER_DIGEST = sh(
-                      script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG",
+                      script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG | cut -d'@' -f2",
                       returnStdout: true
                     ).trim()
                   }
