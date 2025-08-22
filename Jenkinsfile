@@ -1,5 +1,5 @@
 pipeline {
-    agent any  // No global agent, each stage has its own
+    agent any
 
     environment {
         DOCKER_IMAGE = "hddocker125/demo-cbci-test"
@@ -8,44 +8,50 @@ pipeline {
     }
 
     stages {
-        stage('Build') {
-            agent {
-                docker { image 'golang:1.25' } // Go container
-            }
-            steps {
-                echo 'Building Go Application...'
-                sh 'go mod tidy'
-                sh 'go build -o app .'
-            }
-        }
-
-        stage('Docker Build & Push') {
+        stage('Build & Docker Push') {
             agent {
                 docker {
                     image 'docker:24.0-dind'
-                    args '--privileged'
+                    args '--privileged -v $WORKSPACE:/workspace -w /workspace'
                 }
             }
             steps {
-                echo 'Building and pushing Docker image...'
+                echo 'Building Go Application and Docker image...'
+
+                // Install Go inside DinD container
+                sh '''
+                    apk add --no-cache go git bash
+                    go version
+                '''
+
+                // Build Go app
+                sh '''
+                    go mod tidy
+                    go build -o app .
+                '''
+
+                // Docker login, build and push
                 withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                  script {
                     sh '''
-                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
-                      docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
-                      docker push $DOCKER_IMAGE:$DOCKER_TAG
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
+                        docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
+                        docker push $DOCKER_IMAGE:$DOCKER_TAG
                     '''
+                }
+
+                // Capture Docker digest
+                script {
                     env.DOCKER_DIGEST = sh(
-                      script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG | cut -d'@' -f2",
-                      returnStdout: true
+                        script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG | cut -d'@' -f2",
+                        returnStdout: true
                     ).trim()
-                  }
+                    echo "Docker Digest: ${env.DOCKER_DIGEST}"
                 }
             }
         }
 
-        stage('Registering build artifact') {
-            agent any  // Any Jenkins node/container
+        stage('Register Build Artifact') {
+            agent any
             steps {
                 echo "Registering Docker artifact..."
                 script {
@@ -63,19 +69,10 @@ pipeline {
 
         stage('Test') {
             agent {
-                docker { image 'golang:1.25' }
+                docker {
+                    image 'golang:1.25'
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
             }
             steps {
-                echo 'Running Unit Tests...'
-                sh 'go test ./...'
-            }
-        }
-
-        stage('Deploy') {
-            agent any
-            steps {
-                echo 'Deploying...'
-            }
-        }
-    }
-}
+                echo 'Runnin
