@@ -1,18 +1,17 @@
 pipeline {
-    agent any
+    agent any  // No global agent, each stage has its own
 
     environment {
-        DOCKER_IMAGE = "hddocker125/demo-jenk-service"
+        DOCKER_IMAGE = "hddocker125/demo-cbci-test"
         DOCKER_TAG = "latest"
         DOCKER_REGISTRY = "docker.io"
     }
 
-    tools {
-        go 'Go1.25' // name configured in Jenkins
-    }
-
     stages {
         stage('Build') {
+            agent {
+                docker { image 'golang:1.25' } // Go container
+            }
             steps {
                 echo 'Building Go Application...'
                 sh 'go mod tidy'
@@ -21,6 +20,12 @@ pipeline {
         }
 
         stage('Docker Build & Push') {
+            agent {
+                docker {
+                    image 'docker:24.0-dind'
+                    args '--privileged'
+                }
+            }
             steps {
                 echo 'Building and pushing Docker image...'
                 withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -40,11 +45,12 @@ pipeline {
         }
 
         stage('Registering build artifact') {
+            agent any  // Any Jenkins node/container
             steps {
                 echo "Registering Docker artifact..."
                 script {
                     registerBuildArtifactMetadata(
-                        name: "demo-jenk-artifact",
+                        name: "demo-cbci-test",
                         version: "1.0.0",
                         type: "docker",
                         url: "${env.DOCKER_REGISTRY}/${env.DOCKER_IMAGE}:${env.DOCKER_TAG}",
@@ -56,6 +62,9 @@ pipeline {
         }
 
         stage('Test') {
+            agent {
+                docker { image 'golang:1.25' }
+            }
             steps {
                 echo 'Running Unit Tests...'
                 sh 'go test ./...'
@@ -63,6 +72,7 @@ pipeline {
         }
 
         stage('Deploy') {
+            agent any
             steps {
                 echo 'Deploying...'
             }
