@@ -23,7 +23,7 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 echo 'Building and pushing Docker image...'
-                withCredentials([usernamePassword(credentialsId: 'H-docker-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                   script {
                     sh '''
                       echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
