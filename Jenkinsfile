@@ -7,6 +7,10 @@ pipeline {
         DOCKER_REGISTRY = "docker.io"
     }
 
+    tools {
+        go 'Go1.21' // name configured in Jenkins
+    }
+
     stages {
         stage('Build') {
             steps {
