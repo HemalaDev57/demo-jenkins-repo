@@ -8,7 +8,7 @@ pipeline {
     }
 
     tools {
-        go 'Go1.21' // name configured in Jenkins
+        go 'Go1.25' // name configured in Jenkins
     }
 
     stages {
