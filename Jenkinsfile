@@ -1,17 +1,15 @@
 pipeline {
-    agent none  // No global agent, each stage has its own
+    agent any 
 
     environment {
         DOCKER_IMAGE = "hddocker125/demo-jenk-service"
         DOCKER_TAG = "latest"
         DOCKER_REGISTRY = "docker.io"
+        DOCKER_DIGEST = "sha256:a449d2e0b0b2ed78f175d96f41650485ce597400a0db6fb8fd1aa18d5ee282b1"
     }
 
     stages {
         stage('Build') {
-            agent {
-                docker { image 'golang:1.25' } // Go container
-            }
             steps {
                 echo 'Building Go Application...'
                 sh 'go mod tidy'
@@ -20,32 +18,14 @@ pipeline {
         }
 
         stage('Docker Build & Push') {
-            agent {
-                docker {
-                    image 'docker:24.0-dind'
-                    args '--privileged'
-                }
-            }
             steps {
                 echo 'Building and pushing Docker image...'
-                withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                  script {
-                    sh '''
-                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin $DOCKER_REGISTRY
-                      docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
-                      docker push $DOCKER_IMAGE:$DOCKER_TAG
-                    '''
-                    env.DOCKER_DIGEST = sh(
-                      script: "docker inspect --format='{{index .RepoDigests 0}}' $DOCKER_IMAGE:$DOCKER_TAG | cut -d'@' -f2",
-                      returnStdout: true
-                    ).trim()
-                  }
-                }
+                sleep 15
             }
         }
 
         stage('Registering build artifact') {
-            agent any  // Any Jenkins node/container
+            agent any  
             steps {
                 echo "Registering Docker artifact..."
                 script {
@@ -62,9 +42,6 @@ pipeline {
         }
 
         stage('Test') {
-            agent {
-                docker { image 'golang:1.25' }
-            }
             steps {
                 echo 'Running Unit Tests...'
                 sh 'go test ./...'
@@ -75,6 +52,7 @@ pipeline {
             agent any
             steps {
                 echo 'Deploying...'
+                sleep 10
             }
         }
     }
